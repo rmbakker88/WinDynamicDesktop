@@ -215,18 +215,43 @@ namespace WinDynamicDesktop.Skia
             int indicatorWidth = 30;
             int indicatorHeight = 3;
             int itemSpacing = 6;
-            int totalWidth = count * indicatorWidth + (count - 1) * itemSpacing;
-            int startX = (info.Width - totalWidth) / 2;
             int y = info.Height - 16 - 16;  // bottom margin - half of clickable height
+
+            // Themes can have far more images than there is room for, so show a window of them that slides to keep
+            // the selected one near its middle. Excluding the arrow areas keeps every indicator clickable, as those
+            // are full height and are hit tested first.
+            int availableWidth = info.Width - 2 * ARROW_AREA_WIDTH;
+            int visibleCount = Math.Clamp((availableWidth + itemSpacing) / (indicatorWidth + itemSpacing), 1, count);
+            int firstIndex = Math.Clamp(selectedIndex - visibleCount / 2, 0, count - visibleCount);
+
+            int totalWidth = visibleCount * indicatorWidth + (visibleCount - 1) * itemSpacing;
+            int startX = (info.Width - totalWidth) / 2;
 
             CarouselIndicatorRects = new Rectangle[count];
 
             for (int i = 0; i < count; i++)
             {
+                // Indicators outside the window are left with an empty rect, which cannot be hit
+                if (i < firstIndex || i >= firstIndex + visibleCount)
+                {
+                    CarouselIndicatorRects[i] = Rectangle.Empty;
+                    continue;
+                }
+
+                int slot = i - firstIndex;
                 float opacity = (i == selectedIndex) ? OPACITY_HOVER : OPACITY_NORMAL;
+
+                // Fade the ends of the window to show there are more images past them
+                bool isWindowEdge = (slot == 0 && firstIndex > 0) ||
+                    (slot == visibleCount - 1 && firstIndex + visibleCount < count);
+                if (isWindowEdge && i != selectedIndex)
+                {
+                    opacity *= 0.4f;
+                }
+
                 basePaint.Color = SKColors.White.WithAlpha((byte)(255 * opacity));
 
-                int rectX = startX + i * (indicatorWidth + itemSpacing);
+                int rectX = startX + slot * (indicatorWidth + itemSpacing);
                 canvas.DrawRect(rectX, y - indicatorHeight / 2, indicatorWidth, indicatorHeight, basePaint);
 
                 // Cache full clickable area for hit testing
